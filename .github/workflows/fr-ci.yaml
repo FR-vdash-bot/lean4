@@ -23,7 +23,10 @@ jobs:
           submodules: recursive
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: UCRT64
+          msystem: clang64
+          # `:p` means prefix with appropriate msystem prefix
+          pacboy: "make python cmake:p clang:p ccache:p gmp:p git zip unzip diffutils binutils tree zstd:p tar"
+          # msystem: UCRT64
           update: true
           install: git gcc clang mingw-w64-ucrt-x86_64-gcc make python mingw-w64-x86_64-cmake mingw-w64-x86_64-clang mingw-w64-x86_64-ccache unzip diffutils binutils cmake ninja
 
