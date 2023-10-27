@@ -25,7 +25,7 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          install: git mingw-w64-ucrt-x86_64-gcc make python mingw-w64-x86_64-cmake mingw-w64-x86_64-clang mingw-w64-x86_64-ccache unzip diffutils binutils
+          install: git mingw-w64-ucrt-x86_64-gcc make python mingw-w64-x86_64-cmake mingw-w64-x86_64-clang mingw-w64-x86_64-ccache unzip diffutils binutils cmake ninja
 
       - run: |
           mkdir -p build/release
