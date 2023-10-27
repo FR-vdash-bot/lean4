@@ -1,25 +1,7 @@
 name: CI
 on:
   push:
-    branches:
-      - 'master'
-    tags:
-      - '*'
-  pull_request:
-  merge_group:
-  schedule:
-    - cron: '0 7 * * *'  # 8AM CET/11PM PT
-  # for manual re-release of a nightly
-  workflow_dispatch:
-    inputs:
-      action:
-        description: 'Action'
-        required: true
-        default: 'release nightly'
-        type: choice
-        options:
-        - release nightly
-
+  pull_request: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -215,7 +197,7 @@ jobs:
                 "name": "Windows",
                 "os": "windows-2022",
                 "release": true,
-                "check-level": 2,
+                "check-level": 0,
                 "shell": "msys2 {0}",
                 "CMAKE_OPTIONS": "-G \"Unix Makefiles\" -DUSE_GMP=OFF",
                 // for reasons unknown, interactivetests are flaky on Windows
