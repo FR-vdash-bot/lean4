@@ -1,0 +1,38 @@
+name: FR Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - "*"
+  pull_request:
+    branches:
+      - "*"
+
+jobs:
+  build-msys2-ucrt64:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: git mingw-w64-ucrt-x86_64-gcc make python mingw-w64-x86_64-cmake mingw-w64-x86_64-clang mingw-w64-x86_64-ccache unzip diffutils binutils
+
+      - run: |
+          mkdir -p build/release
+          cd build/release
+          cmake ../.. -G "Unix Makefiles"  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          make
+      - uses: actions/upload-artifact@v3
+        with:
+          path: build
+          retention-days: 7
