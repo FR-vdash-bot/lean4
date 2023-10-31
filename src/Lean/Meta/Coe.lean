@@ -21,8 +21,8 @@ def isCoeDecl (env : Environment) (declName : Name) : Bool :=
   coeDeclAttr.hasTag env declName
 
 /-- Expand coercions occurring in `e` -/
-partial def expandCoe (e : Expr) : MetaM Expr :=
-  withReducibleAndInstances do
+partial def expandCoe (e : Expr) : MetaM Expr := do
+  Core.betaReduce <| ← withReducibleAndInstances do
     transform e fun e => do
       let f := e.getAppFn
       if f.isConst then
