@@ -220,6 +220,12 @@ due to `beq_iff_eq`.
 
 /-! ### coercision related normal forms -/
 
+theorem beq_eq_decide_eq [BEq α] [LawfulBEq α] [DecidableEq α] (a b : α) :
+    (a == b) = decide (a = b) := by
+  cases h : a == b
+  · simp [ne_of_beq_false h]
+  · simp [eq_of_beq h]
+
 @[simp] theorem not_eq_not : ∀ {a b : Bool}, ¬a = !b ↔ a = b := by decide
 
 @[simp] theorem not_not_eq : ∀ {a b : Bool}, ¬(!a) = b ↔ a = b := by decide
@@ -229,6 +235,11 @@ due to `beq_iff_eq`.
 @[simp] theorem coe_true_iff_false  : ∀(a b : Bool), (a ↔ b = false) ↔ a = (!b) := by decide
 @[simp] theorem coe_false_iff_true  : ∀(a b : Bool), (a = false ↔ b) ↔ (!a) = b := by decide
 @[simp] theorem coe_false_iff_false : ∀(a b : Bool), (a = false ↔ b = false) ↔ (!a) = (!b) := by decide
+
+/-! ### beq properties -/
+
+theorem beq_comm {α} [BEq α] [LawfulBEq α] {a b : α} : (a == b) = (b == a) :=
+  (Bool.coe_iff_coe (a == b) (b == a)).mp (by simp [@eq_comm α])
 
 /-! ### xor -/
 
@@ -329,9 +340,6 @@ theorem and_or_inj_left_iff :
     ∀ {m x y : Bool}, (m && x) = (m && y) ∧ (m || x) = (m || y) ↔ x = y := by decide
 
 /-! ## toNat -/
-
-/-- convert a `Bool` to a `Nat`, `false -> 0`, `true -> 1` -/
-def toNat (b:Bool) : Nat := cond b 1 0
 
 @[simp] theorem toNat_false : false.toNat = 0 := rfl
 

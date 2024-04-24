@@ -1313,13 +1313,18 @@ gen_injective_theorems% Fin
 gen_injective_theorems% Array
 gen_injective_theorems% Sum
 gen_injective_theorems% PSum
-gen_injective_theorems% Nat
 gen_injective_theorems% Option
 gen_injective_theorems% List
 gen_injective_theorems% Except
 gen_injective_theorems% EStateM.Result
 gen_injective_theorems% Lean.Name
 gen_injective_theorems% Lean.Syntax
+
+theorem Nat.succ.inj {m n : Nat} : m.succ = n.succ → m = n :=
+  fun x => Nat.noConfusion x id
+
+theorem Nat.succ.injEq (u v : Nat) : (u.succ = v.succ) = (u = v) :=
+  Eq.propIntro Nat.succ.inj (congrArg Nat.succ)
 
 @[simp] theorem beq_iff_eq [BEq α] [LawfulBEq α] (a b : α) : a == b ↔ a = b :=
   ⟨eq_of_beq, by intro h; subst h; exact LawfulBEq.rfl⟩
@@ -1601,7 +1606,7 @@ protected def mk' {α : Sort u} [s : Setoid α] (a : α) : Quotient s :=
 The analogue of `Quot.sound`: If `a` and `b` are related by the equivalence relation,
 then they have equal equivalence classes.
 -/
-def sound {α : Sort u} {s : Setoid α} {a b : α} : a ≈ b → Quotient.mk s a = Quotient.mk s b :=
+theorem sound {α : Sort u} {s : Setoid α} {a b : α} : a ≈ b → Quotient.mk s a = Quotient.mk s b :=
   Quot.sound
 
 /--
