@@ -82,8 +82,10 @@ private partial def mkKey (e : Expr) : CanonM Key := do
     return key
   else
     let key ← match e with
-      | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. =>
+      | .sort .. | .fvar .. | .bvar .. | .lit .. =>
         pure { e := (← shareCommon e) }
+      | .const n _ =>
+        pure { e := (← shareCommon (.const n [])) }
       | .mvar .. =>
         -- We instantiate assigned metavariables because the
         -- pretty-printer also instantiates them.
@@ -92,7 +94,7 @@ private partial def mkKey (e : Expr) : CanonM Key := do
         else mkKey eNew
       | .mdata _ a => mkKey a
       | .app .. =>
-        let f := (← mkKey e.getAppFn).e
+        let f := e.getAppFn
         if f.isMVar then
           let eNew ← instantiateMVars e
           unless eNew == e do
@@ -101,13 +103,14 @@ private partial def mkKey (e : Expr) : CanonM Key := do
         let args ← e.getAppArgs.mapIdxM fun i arg => do
           if h : i < info.paramInfo.size then
             let info := info.paramInfo[i]
-            if info.isExplicit then
+            if info.isExplicit && !info.isProp then
               pure (← mkKey arg).e
             else
               pure (mkSort 0) -- some dummy value for erasing implicit
           else
             pure (← mkKey arg).e
-        pure { e := (← shareCommon (mkAppN f args)) }
+        let f' := (← mkKey f).e
+        pure { e := (← shareCommon (mkAppN f' args)) }
       | .lam n t b i =>
         pure { e := (← shareCommon (.lam n (← mkKey t).e (← mkKey b).e i)) }
       | .forallE n t b i =>
