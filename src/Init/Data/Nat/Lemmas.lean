@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura, Jeremy Avigad, Mario Carneiro
 -/
 prelude
-import Init.Data.Bool
 import Init.Data.Nat.MinMax
 import Init.Data.Nat.Log2
 import Init.Data.Nat.Power2
