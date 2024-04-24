@@ -86,6 +86,9 @@ theorem mul_two_le_bit {x b n} : x * 2 ≤ bit b n ↔ x ≤ n := by
 theorem testBit_zero (x : Nat) : testBit x 0 = (x % 2 != 0) := by
   cases mod_two_eq_zero_or_one x with | _ p => simp [testBit, p]
 
+@[simp] theorem _root_.Bool.toNat_testBit_zero (b : Bool) : b.toNat.testBit 0 = b := by
+  cases b <;> rfl
+
 @[simp] theorem testBit_succ (x i : Nat) : testBit x (i + 1) = testBit (x / 2) i := by
   unfold testBit
   simp [shiftRight_succ_inside]
