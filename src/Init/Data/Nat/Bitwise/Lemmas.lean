@@ -83,7 +83,6 @@ theorem mul_two_le_bit {x b n} : x * 2 ≤ bit b n ↔ x ≤ n := by
 theorem bit_testBit_zero (b n) : (bit b n).testBit 0 = b := by
   simp
 
-
 theorem testBit_to_div_mod {x : Nat} : testBit x i = decide (x / 2^i % 2 = 1) := by
   induction i generalizing x with
   | zero =>
@@ -251,7 +250,9 @@ theorem testBit_two_pow_sub_succ (h₂ : x < 2 ^ n) (i : Nat) :
     match n with
     | 0 => simp [succ_sub_succ_eq_sub]
     | n+1 =>
-      simp [← decide_not]
+      -- simp [← decide_not]
+      simp only [testBit_zero, zero_lt_succ, decide_True, ← decide_not (p := x % 2 = 1),
+        mod_two_ne_one, Bool.true_and, decide_eq_decide]
       omega
   | succ i ih =>
     simp only [testBit_succ]
@@ -296,7 +297,7 @@ theorem testBit_bitwise
       simp only [x_zero, y_zero, ←Nat.two_mul]
       cases i with
       | zero =>
-          cases p : f (decide (x % 2 = 1)) (decide (y % 2 = 1)) <;>
+        cases p : f (decide (x % 2 = 1)) (decide (y % 2 = 1)) <;>
           simp [p, Nat.mul_add_mod, mod_eq_of_lt]
       | succ i =>
         have hyp_i := hyp i (Nat.le_refl (i+1))
