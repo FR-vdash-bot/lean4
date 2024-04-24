@@ -9,7 +9,6 @@ import Init.Data.Bool
 import Init.Data.Int.Pow
 import Init.Data.Nat.Bitwise.Basic
 import Init.Data.Nat.Lemmas
-import Init.Data.Nat.Simproc
 import Init.TacticsExtra
 import Init.Omega
 
@@ -287,7 +286,7 @@ theorem testBit_two_pow_sub_succ (h₂ : x < 2 ^ n) (i : Nat) :
     match n with
     | 0 => simp [succ_sub_succ_eq_sub]
     | n+1 =>
-      simp [not_decide_mod_two_eq_one, ← decide_mod_two_eq_one]
+      simp [not_decide_mod_two_eq_one, ← decide_mod_two_eq_one, testBit_zero]
       omega
   | succ i ih =>
     simp only [testBit_succ]
