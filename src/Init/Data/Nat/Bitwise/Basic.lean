@@ -74,7 +74,7 @@ theorem shiftRight_eq_div_pow (m : Nat) : ∀ n, m >>> n = m / 2 ^ n
     rw [shiftRight_add, shiftRight_eq_div_pow m k]
     simp [Nat.div_div_eq_div_mul, ← Nat.pow_succ, shiftRight_succ]
 
-/-- `bit b` appends the digit `b` to the binary representation of
+/-- `bit b` appends the digit `b` to the little end of the binary representation of
   its natural number input. -/
 def bit (b : Bool) (n : Nat) : Nat :=
   cond b (n + n + 1) (n + n)
@@ -120,7 +120,7 @@ theorem testBit_zero (n : Nat) : testBit n 0 = decide (n % 2 = 1) := by
 theorem testBit_zero_toNat (n : Nat) : (n.testBit 0).toNat = n % 2 := by simp
 
 theorem bit_decomp (n : Nat) : bit (n.testBit 0) (n >>> 1) = n := by
-  simp [bit_val, shiftRight_one, Nat.div_add_mod]
+  simp [bit_val]
 
 theorem bit_eq_zero_iff {n : Nat} {b : Bool} : bit b n = 0 ↔ n = 0 ∧ b = false := by
   cases n <;> cases b <;> simp [bit, ← Nat.add_assoc]
