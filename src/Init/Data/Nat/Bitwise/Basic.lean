@@ -102,25 +102,25 @@ theorem mod_two_eq_zero_or_one (n : Nat) : n % 2 = 0 ∨ n % 2 = 1 :=
   | 0, _ => .inl rfl
   | 1, _ => .inr rfl
 
-theorem one_land_eq_mod_two (n : Nat) : 1 &&& n = n % 2 := by
-  dsimp [(· &&& ·), AndOp.and, land]
-  unfold bitwise
+@[simp] theorem one_land_eq_mod_two (n : Nat) : 1 &&& n = n % 2 := by
   match Nat.decEq n 0 with
   | isTrue n0 => subst n0; decide
   | isFalse n0 =>
-    simp only [ite_false, decide_True, Bool.true_and, decide_eq_true_eq, n0,
-      show 1 / 2 = 0 by decide]
-    cases mod_two_eq_zero_or_one n with | _ h => simp [h]; rfl
+    simp only [HAnd.hAnd, AndOp.and, land]
+    unfold bitwise
+    cases mod_two_eq_zero_or_one n with | _ h => simp [n0, h]; rfl
 
-theorem toNat_one_land_ne_zero (n : Nat) : (1 &&& n != 0).toNat = 1 &&& n := by
-  rw [one_land_eq_mod_two]
+@[simp]
+theorem testBit_zero (n : Nat) : testBit n 0 = decide (n % 2 = 1) := by
+  cases mod_two_eq_zero_or_one n with | _ h => simp [testBit, h]
+
+@[simp] theorem decide_mod_two_eq_one_toNat (n : Nat) : (decide (n % 2 = 1)).toNat = n % 2 := by
   cases mod_two_eq_zero_or_one n with | _ h => simp [h]; rfl
 
-theorem shiftRight_one_add_one_land (n : Nat) : 2 * (n >>> 1) + (1 &&& n) = n := by
-  rw [one_land_eq_mod_two, shiftRight_one, Nat.div_add_mod]
+theorem testBit_zero_toNat (n : Nat) : (n.testBit 0).toNat = n % 2 := by simp
 
-theorem bit_decomp (n : Nat) : bit (n.testBit 0) (n >>> 1) = n :=
-  (bit_val _ _).trans ((toNat_one_land_ne_zero n).symm ▸ shiftRight_one_add_one_land _)
+theorem bit_decomp (n : Nat) : bit (n.testBit 0) (n >>> 1) = n := by
+  simp [bit_val, shiftRight_one, Nat.div_add_mod]
 
 theorem bit_eq_zero_iff {n : Nat} {b : Bool} : bit b n = 0 ↔ n = 0 ∧ b = false := by
   cases n <;> cases b <;> simp [bit, ← Nat.add_assoc]

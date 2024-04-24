@@ -23,9 +23,6 @@ namespace Nat
 @[local simp]
 private theorem one_div_two : 1/2 = 0 := by trivial
 
-private theorem decide_mod_two_eq_one {x : Nat} : decide (x % 2 = 1) = (x % 2 != 0) := by
-  cases mod_two_eq_zero_or_one x with | _ h => simp (config := {decide := true}) [h]
-
 private theorem two_pow_succ_sub_succ_div_two : (2 ^ (n+1) - (x + 1)) / 2 = 2^n - (x/2 + 1) := by
   omega
 
@@ -44,15 +41,6 @@ private theorem two_mul_sub_one {n : Nat} (n_pos : n > 0) : (2*n - 1) % 2 = 1 :=
   unfold bitwise
   simp
 
-@[simp] theorem one_and_is_mod (x : Nat) : 1 &&& x = x % 2 := by
-  if xz : x = 0 then
-    simp [xz, zero_and]
-  else
-    have zand := zero_and (x/2)
-    simp only [HAnd.hAnd, AndOp.and, land] at zand ⊢
-    unfold bitwise
-    cases mod_two_eq_zero_or_one x with | _ p => simp [xz, p, zand]
-
 /-! ### bitwise -/
 
 @[simp]
@@ -70,10 +58,15 @@ theorem bitwise_zero : bitwise f 0 0 = 0 := by
 
 /-! ### bit -/
 
+@[simp]
 theorem bit_div_two (b n) : bit b n / 2 = n := by
   rw [bit_val, Nat.add_comm, add_mul_div_left, div_eq_of_lt, Nat.zero_add]
   · cases b <;> decide
   · decide
+
+@[simp]
+theorem bit_mod_two (b n) : bit b n % 2 = b.toNat := by
+  cases b <;> simp [bit_val, mul_add_mod]
 
 theorem mul_two_le_bit {x b n} : x * 2 ≤ bit b n ↔ x ≤ n := by
   rw [← le_div_iff_mul_le Nat.two_pos, bit_div_two]
@@ -83,43 +76,13 @@ theorem mul_two_le_bit {x b n} : x * 2 ≤ bit b n ↔ x ≤ n := by
 @[simp] theorem zero_testBit (i : Nat) : testBit 0 i = false := by
   simp only [testBit, zero_shiftRight, and_zero, bne_self_eq_false]
 
-theorem testBit_zero (x : Nat) : testBit x 0 = (x % 2 != 0) := by
-  cases mod_two_eq_zero_or_one x with | _ p => simp [testBit, p]
-
-@[simp] theorem _root_.Bool.toNat_testBit_zero (b : Bool) : b.toNat.testBit 0 = b := by
-  cases b <;> rfl
-
 @[simp] theorem testBit_succ (x i : Nat) : testBit x (i + 1) = testBit (x / 2) i := by
   unfold testBit
   simp [shiftRight_succ_inside]
 
-theorem testBit_zero_right_eq_mod_two_bne_zero (n : Nat) : testBit n 0 = (n % 2 != 0) := by
-  rw [← one_land_eq_mod_two]; rfl
-
-@[simp]
-theorem succ_testBit_zero (n : Nat) : testBit (succ n) 0 = not (testBit n 0) := by
-  simp only [testBit_zero_right_eq_mod_two_bne_zero, succ_eq_add_one,
-    succ_mod_two_eq_one_sub_mod_two]
-  cases mod_two_eq_zero_or_one n with | _ h => simp [h]
-
-@[simp]
-theorem add_testBit_zero (m n : Nat) : (m + n).testBit 0 = (m.testBit 0).xor (n.testBit 0) := by
-  induction n with
-  | zero => simp
-  | succ n ih => simp [ih, Bool.xor_not, ← Nat.add_assoc]
-
-@[simp]
-theorem mul_testBit_zero (m n : Nat) : (m * n).testBit 0 = (m.testBit 0 && n.testBit 0) := by
-  induction n with
-  | zero => simp
-  | succ n ih =>
-    simp [mul_succ, ih]
-    cases testBit m 0 <;> cases testBit n 0 <;> rfl
-
-@[simp]
 theorem bit_testBit_zero (b n) : (bit b n).testBit 0 = b := by
-  rw [bit_val, Nat.mul_comm, Nat.add_comm, add_testBit_zero, mul_testBit_zero]
-  cases b <;> cases testBit n 0 <;> rfl
+  simp
+
 
 theorem testBit_to_div_mod {x : Nat} : testBit x i = decide (x / 2^i % 2 = 1) := by
   induction i generalizing x with
@@ -128,6 +91,9 @@ theorem testBit_to_div_mod {x : Nat} : testBit x i = decide (x / 2^i % 2 = 1) :=
     cases mod_two_eq_zero_or_one x with | _ xz => simp [xz]
   | succ i hyp =>
     simp [hyp, Nat.div_div_eq_div_mul, Nat.pow_succ']
+
+@[simp] theorem _root_.Bool.toNat_testBit_zero (b : Bool) : b.toNat.testBit 0 = b := by
+  cases b <;> rfl
 
 theorem toNat_testBit (x i : Nat) :
     (x.testBit i).toNat = x / 2 ^ i % 2 := by
@@ -156,7 +122,7 @@ theorem ne_implies_bit_diff {x y : Nat} (p : x ≠ y) : ∃ i, testBit x i ≠ t
       refine ⟨i + 1, ?_⟩
       rwa [testBit_succ, bit_div_two, testBit_succ, bit_div_two]
     · refine ⟨0, ?_⟩
-      rwa [bit_testBit_zero, bit_testBit_zero]
+      simpa using hb
 
 /--
 `eq_of_testBit_eq` allows proving two natural numbers are equal
@@ -278,10 +244,6 @@ theorem testBit_two_pow_add_gt {i j : Nat} (j_lt_i : j < i) (x : Nat) :
 
 theorem testBit_one_zero : testBit 1 0 = true := by trivial
 
-theorem not_decide_mod_two_eq_one (x : Nat)
-    : (!decide (x % 2 = 1)) = decide (x % 2 = 0) := by
-  cases Nat.mod_two_eq_zero_or_one x <;> (rename_i p; simp [p])
-
 theorem testBit_two_pow_sub_succ (h₂ : x < 2 ^ n) (i : Nat) :
     testBit (2^n - (x + 1)) i = (decide (i < n) && ! testBit x i) := by
   induction i generalizing n x with
@@ -289,7 +251,7 @@ theorem testBit_two_pow_sub_succ (h₂ : x < 2 ^ n) (i : Nat) :
     match n with
     | 0 => simp [succ_sub_succ_eq_sub]
     | n+1 =>
-      simp [not_decide_mod_two_eq_one, ← decide_mod_two_eq_one, testBit_zero]
+      simp [← decide_not]
       omega
   | succ i ih =>
     simp only [testBit_succ]
@@ -334,12 +296,12 @@ theorem testBit_bitwise
       simp only [x_zero, y_zero, ←Nat.two_mul]
       cases i with
       | zero =>
-        cases p : f (x % 2 != 0) (y % 2 != 0) <;>
-          simp [p, testBit_zero, decide_mod_two_eq_one, Nat.mul_add_mod]
+          cases p : f (decide (x % 2 = 1)) (decide (y % 2 = 1)) <;>
+          simp [p, Nat.mul_add_mod, mod_eq_of_lt]
       | succ i =>
         have hyp_i := hyp i (Nat.le_refl (i+1))
-        cases p : f (x % 2 != 0) (y % 2 != 0) <;>
-          simp [p, testBit_succ, decide_mod_two_eq_one, hyp_i, Nat.mul_add_div]
+        cases p : f (decide (x % 2 = 1)) (decide (y % 2 = 1)) <;>
+          simp [p, one_div_two, hyp_i, Nat.mul_add_div]
 
 /-! ### bitwise -/
 
