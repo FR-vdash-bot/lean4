@@ -250,9 +250,7 @@ theorem testBit_two_pow_sub_succ (h₂ : x < 2 ^ n) (i : Nat) :
     match n with
     | 0 => simp [succ_sub_succ_eq_sub]
     | n+1 =>
-      -- simp [← decide_not]
-      simp only [testBit_zero, zero_lt_succ, decide_True, ← decide_not (p := x % 2 = 1),
-        mod_two_ne_one, Bool.true_and, decide_eq_decide]
+      simp [← decide_not]
       omega
   | succ i ih =>
     simp only [testBit_succ]

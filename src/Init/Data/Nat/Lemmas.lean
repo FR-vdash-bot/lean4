@@ -545,6 +545,14 @@ theorem mul_mod (a b n : Nat) : a * b % n = (a % n) * (b % n) % n := by
 theorem add_mod (a b n : Nat) : (a + b) % n = ((a % n) + (b % n)) % n := by
   rw [add_mod_mod, mod_add_mod]
 
+@[simp]
+theorem mod_two_ne_one {n : Nat} : ¬n % 2 = 1 ↔ n % 2 = 0 := by
+  cases mod_two_eq_zero_or_one n with | _ h => simp [h]
+
+@[simp]
+theorem mod_two_ne_zero {n : Nat} : ¬n % 2 = 0 ↔ n % 2 = 1 := by
+  cases mod_two_eq_zero_or_one n with | _ h => simp [h]
+
 /-! ### pow -/
 
 theorem pow_succ' {m n : Nat} : m ^ n.succ = m * m ^ n := by
