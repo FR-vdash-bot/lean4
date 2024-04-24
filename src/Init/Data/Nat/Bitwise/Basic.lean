@@ -151,11 +151,11 @@ def binaryRec' {C : Nat → Sort u} (z : C 0)
     (f : ∀ b n, (n = 0 → b = true) → C n → C (bit b n)) : ∀ n, C n :=
   binaryRec z fun b n ih =>
     if h : n = 0 → b = true then f b n h ih
-    else by
+    else
       have : bit b n = 0 := by
         rw [bit_eq_zero_iff]
         cases n <;> cases b <;> simp at h <;> simp [h]
-      exact this ▸ z
+      congrArg C this ▸ z
 
 /-- The same as `binaryRec`, but special casing both 0 and 1 as base cases -/
 @[elab_as_elim, specialize]
