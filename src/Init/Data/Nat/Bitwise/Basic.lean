@@ -120,7 +120,7 @@ theorem testBit_zero (n : Nat) : testBit n 0 = decide (n % 2 = 1) := by
 theorem testBit_zero_toNat (n : Nat) : (n.testBit 0).toNat = n % 2 := by simp
 
 theorem bit_decomp (n : Nat) : bit (n.testBit 0) (n >>> 1) = n := by
-  simp [bit_val]
+  simp [bit_val, shiftRight_one, Nat.div_add_mod]
 
 theorem bit_eq_zero_iff {n : Nat} {b : Bool} : bit b n = 0 ↔ n = 0 ∧ b = false := by
   cases n <;> cases b <;> simp [bit, ← Nat.add_assoc]
