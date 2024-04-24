@@ -54,23 +54,76 @@ private theorem two_mul_sub_one {n : Nat} (n_pos : n > 0) : (2*n - 1) % 2 = 1 :=
     unfold bitwise
     cases mod_two_eq_zero_or_one x with | _ p => simp [xz, p, zand]
 
+/-! ### bitwise -/
+
+@[simp]
+theorem bitwise_zero_left (m : Nat) : bitwise f 0 m = if f false true then m else 0 :=
+  rfl
+
+@[simp]
+theorem bitwise_zero_right (n : Nat) : bitwise f n 0 = if f true false then n else 0 := by
+  unfold bitwise
+  simp only [ite_self, decide_False, Nat.zero_div, ite_true]
+  cases n <;> simp
+
+theorem bitwise_zero : bitwise f 0 0 = 0 := by
+  simp only [bitwise_zero_right, ite_self]
+
+/-! ### bit -/
+
+theorem bit_div_two (b n) : bit b n / 2 = n := by
+  rw [bit_val, Nat.add_comm, add_mul_div_left, div_eq_of_lt, Nat.zero_add]
+  · cases b <;> decide
+  · decide
+
+theorem mul_two_le_bit {x b n} : x * 2 ≤ bit b n ↔ x ≤ n := by
+  rw [← le_div_iff_mul_le Nat.two_pos, bit_div_two]
+
 /-! ### testBit -/
 
 @[simp] theorem zero_testBit (i : Nat) : testBit 0 i = false := by
-  simp only [testBit, zero_shiftRight, bodd, and_zero, bne_self_eq_false]
+  simp only [testBit, zero_shiftRight, and_zero, bne_self_eq_false]
 
-@[simp] theorem testBit_zero (x : Nat) : testBit x 0 = bodd x :=
-  rfl
+theorem testBit_zero (x : Nat) : testBit x 0 = (x % 2 != 0) := by
+  cases mod_two_eq_zero_or_one x with | _ p => simp [testBit, p]
 
 @[simp] theorem testBit_succ (x i : Nat) : testBit x (i + 1) = testBit (x / 2) i := by
   unfold testBit
-  simp [shiftRight_succ_inside, div2]
+  simp [shiftRight_succ_inside]
+
+theorem testBit_zero_right_eq_mod_two_bne_zero (n : Nat) : testBit n 0 = (n % 2 != 0) := by
+  rw [← one_land_eq_mod_two]; rfl
+
+@[simp]
+theorem succ_testBit_zero (n : Nat) : testBit (succ n) 0 = not (testBit n 0) := by
+  simp only [testBit_zero_right_eq_mod_two_bne_zero, succ_eq_add_one,
+    succ_mod_two_eq_one_sub_mod_two]
+  cases mod_two_eq_zero_or_one n with | _ h => simp [h]
+
+@[simp]
+theorem add_testBit_zero (m n : Nat) : (m + n).testBit 0 = (m.testBit 0).xor (n.testBit 0) := by
+  induction n with
+  | zero => simp
+  | succ n ih => simp [ih, Bool.xor_not, ← Nat.add_assoc]
+
+@[simp]
+theorem mul_testBit_zero (m n : Nat) : (m * n).testBit 0 = (m.testBit 0 && n.testBit 0) := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    simp [mul_succ, ih]
+    cases testBit m 0 <;> cases testBit n 0 <;> rfl
+
+@[simp]
+theorem bit_testBit_zero (b n) : (bit b n).testBit 0 = b := by
+  rw [bit_val, Nat.mul_comm, Nat.add_comm, add_testBit_zero, mul_testBit_zero]
+  cases b <;> cases testBit n 0 <;> rfl
 
 theorem testBit_to_div_mod {x : Nat} : testBit x i = decide (x / 2^i % 2 = 1) := by
   induction i generalizing x with
   | zero =>
     unfold testBit
-    cases mod_two_eq_zero_or_one x with | _ xz => simp [bodd, xz]
+    cases mod_two_eq_zero_or_one x with | _ xz => simp [xz]
   | succ i hyp =>
     simp [hyp, Nat.div_div_eq_div_mul, Nat.pow_succ']
 
@@ -95,13 +148,13 @@ theorem ne_implies_bit_diff {x y : Nat} (p : x ≠ y) : ∃ i, testBit x i ≠ t
     exact ne_zero_implies_bit_true p
   | f yb y h hyp =>
     rw [← x.bit_decomp] at *
-    by_cases hb : bodd x = yb
+    by_cases hb : testBit x 0 = yb
     · subst hb
       obtain ⟨i, h⟩ := hyp (mt (congrArg _) p)
       refine ⟨i + 1, ?_⟩
       rwa [testBit_succ, bit_div_two, testBit_succ, bit_div_two]
     · refine ⟨0, ?_⟩
-      rwa [testBit_zero, testBit_zero, bodd_bit, bodd_bit]
+      rwa [bit_testBit_zero, bit_testBit_zero]
 
 /--
 `eq_of_testBit_eq` allows proving two natural numbers are equal
@@ -149,8 +202,6 @@ theorem lt_pow_two_of_testBit (x : Nat) (p : ∀i, i ≥ n → testBit x i = fal
   have ⟨i, ⟨i_ge_n, test_true⟩⟩ := ge_two_pow_implies_high_bit_true x_ge_n
   have test_false := p _ i_ge_n
   simp only [test_true] at test_false
-
-/-! ### testBit -/
 
 private theorem succ_mod_two : succ x % 2 = 1 - x % 2 := by
   induction x with
@@ -219,7 +270,7 @@ theorem testBit_two_pow_add_gt {i j : Nat} (j_lt_i : j < i) (x : Nat) :
             exact Nat.lt_add_of_pos_right (Nat.two_pow_pos j)
       simp only [hyp y y_lt_x]
       if i_lt_j : i < j then
-        rw [ Nat.add_comm _ (2^_), testBit_two_pow_add_gt i_lt_j]
+        rw [Nat.add_comm _ (2^_), testBit_two_pow_add_gt i_lt_j]
       else
         simp [i_lt_j]
 
@@ -236,7 +287,7 @@ theorem testBit_two_pow_sub_succ (h₂ : x < 2 ^ n) (i : Nat) :
     match n with
     | 0 => simp [succ_sub_succ_eq_sub]
     | n+1 =>
-      simp [not_decide_mod_two_eq_one, Nat.bodd, ← decide_mod_two_eq_one]
+      simp [not_decide_mod_two_eq_one, ← decide_mod_two_eq_one]
       omega
   | succ i ih =>
     simp only [testBit_succ]
@@ -282,7 +333,7 @@ theorem testBit_bitwise
       cases i with
       | zero =>
         cases p : f (x % 2 != 0) (y % 2 != 0) <;>
-          simp [p, testBit_zero, bodd, decide_mod_two_eq_one, Nat.mul_add_mod]
+          simp [p, testBit_zero, decide_mod_two_eq_one, Nat.mul_add_mod]
       | succ i =>
         have hyp_i := hyp i (Nat.le_refl (i+1))
         cases p : f (x % 2 != 0) (y % 2 != 0) <;>
@@ -449,3 +500,34 @@ theorem mul_add_lt_is_or {b : Nat} (b_lt : b < 2^i) (a : Nat) : 2^i * a + b = 2^
 
 @[simp] theorem testBit_shiftRight (x : Nat) : testBit (x >>> i) j = testBit x (i+j) := by
   simp [testBit, ←shiftRight_add]
+
+theorem bit_shiftRight_one (b n) : bit b n >>> 1 = n :=
+  bit_div_two b n
+
+/-! ### binaryRec -/
+
+@[simp]
+theorem binaryRec_zero {C : Nat → Sort u} (z : C 0) (f : ∀ b n, C n → C (bit b n)) :
+    binaryRec z f 0 = z :=
+  rfl
+
+theorem binaryRec_of_ne_zero {C : Nat → Sort u} (z : C 0) (f : ∀ b n, C n → C (bit b n)) {n}
+    (h : n ≠ 0) :
+    binaryRec z f n = bit_decomp n ▸ f (n.testBit 0) (n >>> 1) (binaryRec z f (n >>> 1)) := by
+  rw [binaryRec, dif_neg h, eqRec_eq_cast, eqRec_eq_cast]; rfl
+
+theorem binaryRec_eq {C : Nat → Sort u} {z : C 0} {f : ∀ b n, C n → C (bit b n)} (b n)
+    (h : f false 0 z = z ∨ (n = 0 → b = true)) :
+    binaryRec z f (bit b n) = f b n (binaryRec z f n) := by
+  by_cases h' : bit b n = 0
+  case pos =>
+    obtain ⟨rfl, rfl⟩ := bit_eq_zero_iff.mp h'
+    simp only [forall_const, or_false] at h
+    exact h.symm
+  case neg =>
+    rw [binaryRec_of_ne_zero _ _ h']
+    generalize bit_decomp (bit b n) = e; revert e
+    rw [bit_testBit_zero, bit_shiftRight_one]
+    intros; rfl
+
+end Nat
