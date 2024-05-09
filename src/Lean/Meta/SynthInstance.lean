@@ -587,13 +587,15 @@ def generate : SynthM Unit := do
   let gNode ← getTop
   let pop := do
     modify fun s => { s with generatorStack := s.generatorStack.pop }
-  if gNode.currInstanceIdx == 0 then pop return
-  let key  := gNode.key
-  let idx  := gNode.currInstanceIdx - 1
-  let inst := gNode.instances.get! idx
-  let mctx := gNode.mctx
-  let mvar := gNode.mvar
-  /- See comment at `typeHasMVars` -/
+  if gNode.currInstanceIdx == 0 then
+    pop
+  else
+    let key  := gNode.key
+    let idx  := gNode.currInstanceIdx - 1
+    let inst := gNode.instances.get! idx
+    let mctx := gNode.mctx
+    let mvar := gNode.mvar
+    /- See comment at `typeHasMVars` -/
     if backward.synthInstance.canonInstances.get (← getOptions) then
       unless gNode.typeHasMVars do
         if let some entry := (← get).tableEntries.find? key then
@@ -605,23 +607,23 @@ def generate : SynthM Unit := do
             -/
             modify fun s => { s with generatorStack := s.generatorStack.pop }
             return
-  discard do withMCtx mctx do
-    let pop' (key : Expr) : SynthM Bool := do
-      let some e ← findEntry? key | return false
-      if e.answers.size == 0 then return false
-      if e.answers.back.result.numMVars > 0 then return false
-      let type ← instantiateMVars (← inferType mvar)
-      if type.hasMVar then return false
-      trace[Meta.synthInstance] m!"Found in cache and stop applying: {type}"
-      pop return true
-    if (← pop' key) then return none
-    withTraceNode `Meta.synthInstance
-      (return m!"{exceptOptionEmoji ·} apply {inst.val} to {← instantiateMVars (← inferType mvar)}") do
-    modifyTop fun gNode => { gNode with currInstanceIdx := idx }
-    if let some (mctx, subgoals) ← tryResolve mvar inst then
-      consume { key, mvar, subgoals, mctx, size := 0 }
-      return some ()
-    return none
+    discard do withMCtx mctx do
+      let pop' (key : Expr) : SynthM Bool := do
+        let some e ← findEntry? key | return false
+        if e.answers.size == 0 then return false
+        if e.answers.back.result.numMVars > 0 then return false
+        let type ← instantiateMVars (← inferType mvar)
+        if type.hasMVar then return false
+        trace[Meta.synthInstance] m!"Found in cache and stop applying: {type}"
+        pop return true
+      if (← pop' key) then return none
+      withTraceNode `Meta.synthInstance
+        (return m!"{exceptOptionEmoji ·} apply {inst.val} to {← instantiateMVars (← inferType mvar)}") do
+      modifyTop fun gNode => { gNode with currInstanceIdx := idx }
+      if let some (mctx, subgoals) ← tryResolve mvar inst then
+        consume { key, mvar, subgoals, mctx, size := 0 }
+        return some ()
+      return none
 
 def getNextToResume : SynthM (ConsumerNode × Answer) := do
   let r := (← get).resumeStack.back
