@@ -12,6 +12,7 @@ import Lean.Meta.Instances
 import Lean.Meta.AbstractMVars
 import Lean.Meta.Check
 import Lean.Util.Profile
+import Lean.KeyedDeclsAttribute
 
 namespace Lean.Meta
 
@@ -101,7 +102,7 @@ structure State where
   emap    : HashMap MVarId Expr := {}
   mctx    : MetavarContext
 
-abbrev M := StateM State
+abbrev M := StateT State MetaM
 
 @[always_inline]
 instance : MonadMCtx M where
@@ -128,13 +129,36 @@ partial def normLevel (u : Level) : M Level := do
           return u'
     | u => return u
 
-partial def normExpr (e : Expr) : M Expr := do
-  if !e.hasMVar then
-    pure e
-  else match e with
+def getAppHead (e : Expr) : Expr :=
+  match e with
+  | .app f _ => getAppHead f
+  | f => f
+
+def isAppInstance (e : Expr) : M Bool := do
+  match getAppHead e with
+  | .const declName _ => isInstance declName
+  | _ => return false
+
+unsafe abbrev PtrMap (α : Type) (β : Type) := HashMap (Ptr α) β
+unsafe abbrev PtrTabled (α : Type) (β : Type) (M : Type → Type) :=
+  ReaderT (PtrMap α β) M β
+
+unsafe def normExprUnsafe (e : Expr) : M Expr := do
+  let visited : IO.Ref (PtrMap _ _) ← IO.mkRef {}
+  let rec cached (self : _) : M _ := do
+    if let some result := (← visited.get).find? ⟨self⟩ then return result
+    let result ← normExpr cached self
+    visited.modify (fun c => c.insert ⟨self⟩ result)
+    return result
+  cached e
+where
+  normExpr (normExpr : Expr → M Expr) (e : Expr) : M Expr := do
+    match e with
     | .const _ us      => return e.updateConst! (← us.mapM normLevel)
     | .sort u          => return e.updateSort! (← normLevel u)
-    | .app f a         => return e.updateApp! (← normExpr f) (← normExpr a)
+    | .app f a         => do
+      let a := if ← isAppInstance a then .sort 0 else (← normExpr a)
+      return e.updateApp! (← normExpr f) a
     | .letE _ t v b _  => return e.updateLet! (← normExpr t) (← normExpr v) (← normExpr b)
     | .forallE _ d b _ => return e.updateForallE! (← normExpr d) (← normExpr b)
     | .lam _ d b _     => return e.updateLambdaE! (← normExpr d) (← normExpr b)
@@ -153,11 +177,14 @@ partial def normExpr (e : Expr) : M Expr := do
           return e'
     | _ => return e
 
+@[implemented_by normExprUnsafe]
+opaque normExpr (e : Expr) : M Expr
+
 end MkTableKey
 
 /-- Remark: `mkTableKey` assumes `e` does not contain assigned metavariables. -/
-def mkTableKey [Monad m] [MonadMCtx m] (e : Expr) : m Expr := do
-  let (r, s) := MkTableKey.normExpr e |>.run { mctx := (← getMCtx) }
+def mkTableKey (e : Expr) : MetaM Expr := do
+  let (r, s) ← MkTableKey.normExpr e |>.run { mctx := (← getMCtx) }
   setMCtx s.mctx
   return r
 
@@ -517,11 +544,14 @@ def consume (cNode : ConsumerNode) : SynthM Unit := do
      | none       =>
        -- Remove unused arguments and try again, see comment at `removeUnusedArguments?`
        match (← removeUnusedArguments? cNode.mctx mvar) with
-       | none => newSubgoal cNode.mctx key mvar waiter
+       | none => do
+         trace[Meta.synthInstance] m!"Not found in the temporary cache, keys: {key}"
+         newSubgoal cNode.mctx key mvar waiter
        | some (mvarType', transformer) =>
          let key' ← withMCtx cNode.mctx <| mkTableKey mvarType'
          match (← findEntry? key') with
-         | none =>
+         | none => do
+           trace[Meta.synthInstance] m!"Not found in the temporary cache, keys: {key'}"
            let (mctx', mvar') ← withMCtx cNode.mctx do
              let mvar' ← mkFreshExprMVar mvarType'
              return (← getMCtx, mvar')
@@ -531,11 +561,15 @@ def consume (cNode : ConsumerNode) : SynthM Unit := do
              let trAnswr := Expr.betaRev transformer #[← instantiateMVars a.result.expr]
              let trAnswrType ← inferType trAnswr
              pure { a with result.expr := trAnswr, resultType := trAnswrType }
+           do
+             trace[Meta.synthInstance] m!"Found {answers'.size} answer(s) in temporary cache for {← instantiateMVars (← inferType mvar)}"
            modify fun s =>
              { s with
                resumeStack  := answers'.foldl (fun s answer => s.push (cNode, answer)) s.resumeStack,
                tableEntries := s.tableEntries.insert key' { entry' with waiters := entry'.waiters.push waiter } }
-     | some entry => modify fun s =>
+     | some entry => do
+       trace[Meta.synthInstance] m!"Found {entry.answers.size} answer(s) in temporary cache for {← instantiateMVars (← inferType mvar)}"
+       modify fun s =>
        { s with
          resumeStack  := entry.answers.foldl (fun s answer => s.push (cNode, answer)) s.resumeStack,
          tableEntries := s.tableEntries.insert key { entry with waiters := entry.waiters.push waiter } }
@@ -549,15 +583,15 @@ def getTop : SynthM GeneratorNode :=
 /-- Try the next instance in the node on the top of the generator stack. -/
 def generate : SynthM Unit := do
   let gNode ← getTop
-  if gNode.currInstanceIdx == 0  then
+  let pop := do
     modify fun s => { s with generatorStack := s.generatorStack.pop }
-  else
-    let key  := gNode.key
-    let idx  := gNode.currInstanceIdx - 1
-    let inst := gNode.instances.get! idx
-    let mctx := gNode.mctx
-    let mvar := gNode.mvar
-    /- See comment at `typeHasMVars` -/
+  if gNode.currInstanceIdx == 0 then pop return
+  let key  := gNode.key
+  let idx  := gNode.currInstanceIdx - 1
+  let inst := gNode.instances.get! idx
+  let mctx := gNode.mctx
+  let mvar := gNode.mvar
+  /- See comment at `typeHasMVars` -/
     if backward.synthInstance.canonInstances.get (← getOptions) then
       unless gNode.typeHasMVars do
         if let some entry := (← get).tableEntries.find? key then
@@ -569,14 +603,24 @@ def generate : SynthM Unit := do
             -/
             modify fun s => { s with generatorStack := s.generatorStack.pop }
             return
-    discard do withMCtx mctx do
-      withTraceNode `Meta.synthInstance
-        (return m!"{exceptOptionEmoji ·} apply {inst.val} to {← instantiateMVars (← inferType mvar)}") do
-      modifyTop fun gNode => { gNode with currInstanceIdx := idx }
-      if let some (mctx, subgoals) ← tryResolve mvar inst then
-        consume { key, mvar, subgoals, mctx, size := 0 }
-        return some ()
-      return none
+  discard do withMCtx mctx do
+    let pop' (key : Expr) : SynthM Bool := do
+      let some e ← find == 0 then return false
+      if e.answers.bacEntry? key | return false
+      if e.answers.size == 0 then return false
+      if e.answers.back.result.numMVars > 0 then return false
+      let type ← instantiateMVars (← inferType mvar)
+      if type.hasMVar then return false
+      trace[Meta.synthInstance] m!"Found in cache and stop applying: {type}"
+      pop return true
+    if (← pop' key) then return none
+    withTraceNode `Meta.synthInstance
+      (return m!"{exceptOptionEmoji ·} apply {inst.val} to {← instantiateMVars (← inferType mvar)}") do
+    modifyTop fun gNode => { gNode with currInstanceIdx := idx }
+    if let some (mctx, subgoals) ← tryResolve mvar inst then
+      consume { key, mvar, subgoals, mctx, size := 0 }
+      return some ()
+    return none
 
 def getNextToResume : SynthM (ConsumerNode × Answer) := do
   let r := (← get).resumeStack.back
@@ -827,6 +871,8 @@ builtin_initialize
   registerTraceClass `Meta.synthInstance.tryResolve (inherited := true)
   registerTraceClass `Meta.synthInstance.resume (inherited := true)
   registerTraceClass `Meta.synthInstance.unusedArgs
+  registerTraceClass `Meta.synthInstance.answer
   registerTraceClass `Meta.synthInstance.newAnswer
+  registerTraceClass `Meta.synthInstance.heartBeats
 
 end Lean.Meta
