@@ -157,8 +157,10 @@ where
     | .const _ us      => return e.updateConst! (← us.mapM normLevel)
     | .sort u          => return e.updateSort! (← normLevel u)
     | .app f a         => do
-      let a := if ← isAppInstance a then .sort 0 else (← normExpr a)
-      return e.updateApp! (← normExpr f) a
+      if ← isAppInstance a then
+        return e.updateApp! (← normExpr f) (.sort 0)
+      else
+        return e.updateApp! (← normExpr f) (← normExpr a)
     | .letE _ t v b _  => return e.updateLet! (← normExpr t) (← normExpr v) (← normExpr b)
     | .forallE _ d b _ => return e.updateForallE! (← normExpr d) (← normExpr b)
     | .lam _ d b _     => return e.updateLambdaE! (← normExpr d) (← normExpr b)
