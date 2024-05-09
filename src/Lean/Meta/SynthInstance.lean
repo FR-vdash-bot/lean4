@@ -607,8 +607,7 @@ def generate : SynthM Unit := do
             return
   discard do withMCtx mctx do
     let pop' (key : Expr) : SynthM Bool := do
-      let some e ← find == 0 then return false
-      if e.answers.bacEntry? key | return false
+      let some e ← findEntry? key | return false
       if e.answers.size == 0 then return false
       if e.answers.back.result.numMVars > 0 then return false
       let type ← instantiateMVars (← inferType mvar)
