@@ -546,14 +546,11 @@ def consume (cNode : ConsumerNode) : SynthM Unit := do
      | none       =>
        -- Remove unused arguments and try again, see comment at `removeUnusedArguments?`
        match (← removeUnusedArguments? cNode.mctx mvar) with
-       | none => do
-         trace[Meta.synthInstance] m!"Not found in the temporary cache, keys: {key}"
-         newSubgoal cNode.mctx key mvar waiter
+       | none => do newSubgoal cNode.mctx key mvar waiter
        | some (mvarType', transformer) =>
          let key' ← withMCtx cNode.mctx <| mkTableKey mvarType'
          match (← findEntry? key') with
          | none => do
-           trace[Meta.synthInstance] m!"Not found in the temporary cache, keys: {key'}"
            let (mctx', mvar') ← withMCtx cNode.mctx do
              let mvar' ← mkFreshExprMVar mvarType'
              return (← getMCtx, mvar')
@@ -564,13 +561,11 @@ def consume (cNode : ConsumerNode) : SynthM Unit := do
              let trAnswrType ← inferType trAnswr
              pure { a with result.expr := trAnswr, resultType := trAnswrType }
            do
-             trace[Meta.synthInstance] m!"Found {answers'.size} answer(s) in temporary cache for {← instantiateMVars (← inferType mvar)}"
            modify fun s =>
              { s with
                resumeStack  := answers'.foldl (fun s answer => s.push (cNode, answer)) s.resumeStack,
                tableEntries := s.tableEntries.insert key' { entry' with waiters := entry'.waiters.push waiter } }
      | some entry => do
-       trace[Meta.synthInstance] m!"Found {entry.answers.size} answer(s) in temporary cache for {← instantiateMVars (← inferType mvar)}"
        modify fun s =>
        { s with
          resumeStack  := entry.answers.foldl (fun s answer => s.push (cNode, answer)) s.resumeStack,
@@ -614,7 +609,6 @@ def generate : SynthM Unit := do
         if e.answers.back.result.numMVars > 0 then return false
         let type ← instantiateMVars (← inferType mvar)
         if type.hasMVar then return false
-        trace[Meta.synthInstance] m!"Found in cache and stop applying: {type}"
         pop return true
       if (← pop' key) then return none
       withTraceNode `Meta.synthInstance
@@ -874,8 +868,6 @@ builtin_initialize
   registerTraceClass `Meta.synthInstance.tryResolve (inherited := true)
   registerTraceClass `Meta.synthInstance.resume (inherited := true)
   registerTraceClass `Meta.synthInstance.unusedArgs
-  registerTraceClass `Meta.synthInstance.answer
   registerTraceClass `Meta.synthInstance.newAnswer
-  registerTraceClass `Meta.synthInstance.heartBeats
 
 end Lean.Meta
