@@ -546,11 +546,11 @@ def consume (cNode : ConsumerNode) : SynthM Unit := do
      | none       =>
        -- Remove unused arguments and try again, see comment at `removeUnusedArguments?`
        match (← removeUnusedArguments? cNode.mctx mvar) with
-       | none => do newSubgoal cNode.mctx key mvar waiter
+       | none => newSubgoal cNode.mctx key mvar waiter
        | some (mvarType', transformer) =>
          let key' ← withMCtx cNode.mctx <| mkTableKey mvarType'
          match (← findEntry? key') with
-         | none => do
+         | none =>
            let (mctx', mvar') ← withMCtx cNode.mctx do
              let mvar' ← mkFreshExprMVar mvarType'
              return (← getMCtx, mvar')
@@ -560,13 +560,11 @@ def consume (cNode : ConsumerNode) : SynthM Unit := do
              let trAnswr := Expr.betaRev transformer #[← instantiateMVars a.result.expr]
              let trAnswrType ← inferType trAnswr
              pure { a with result.expr := trAnswr, resultType := trAnswrType }
-           do
            modify fun s =>
              { s with
                resumeStack  := answers'.foldl (fun s answer => s.push (cNode, answer)) s.resumeStack,
                tableEntries := s.tableEntries.insert key' { entry' with waiters := entry'.waiters.push waiter } }
-     | some entry => do
-       modify fun s =>
+     | some entry => modify fun s =>
        { s with
          resumeStack  := entry.answers.foldl (fun s answer => s.push (cNode, answer)) s.resumeStack,
          tableEntries := s.tableEntries.insert key { entry with waiters := entry.waiters.push waiter } }
