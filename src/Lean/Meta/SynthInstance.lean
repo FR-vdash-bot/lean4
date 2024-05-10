@@ -138,10 +138,10 @@ def isAppInstance (e : Expr) : M Bool := do
   | .const declName _ => isInstance declName
   | _ => return false
 
-def normExpr (e : Expr) : M Expr := do
-  let cache : IO.Ref (HashMap Expr Expr) ← IO.mkRef {}
+unsafe def normExprUnsafe (e : Expr) : M Expr := do
+  let cache : IO.Ref (HashMap (Ptr Expr) Expr) ← IO.mkRef {}
   let rec normExpr (e : Expr) : M Expr := do
-    if let some result := (← cache.get).find? e then return result
+    if let some result := (← cache.get).find? ⟨e⟩ then return result
     let result ← (do
     match e with
     | .const _ us      => return e.updateConst! (← us.mapM normLevel)
@@ -168,9 +168,12 @@ def normExpr (e : Expr) : M Expr := do
           modify fun s => { s with nextIdx := s.nextIdx + 1, emap := s.emap.insert mvarId e' }
           return e'
     | _ => return e)
-    cache.modify (fun c => c.insert e result)
+    cache.modify (fun c => c.insert ⟨e⟩ result)
     return result
   normExpr e
+
+@[implemented_by normExprUnsafe]
+opaque normExpr (e : Expr) : M Expr
 
 end MkTableKey
 
