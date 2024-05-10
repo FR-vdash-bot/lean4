@@ -140,37 +140,37 @@ def isAppInstance (e : Expr) : M Bool := do
 
 def normExpr (e : Expr) : M Expr := do
   let cache : IO.Ref (HashMap Expr Expr) ← IO.mkRef {}
-  let rec go (e : Expr) : M Expr := do
+  let rec normExpr (e : Expr) : M Expr := do
     if let some result := (← cache.get).find? e then return result
     let result ← (do
-      match e with
-      | .const _ us      => return e.updateConst! (← us.mapM normLevel)
-      | .sort u          => return e.updateSort! (← normLevel u)
-      | .app f a         =>
-        if ← isAppInstance a then
-          return e.updateApp! (← go f) (.sort 0)
-        else
-          return e.updateApp! (← go f) (← go a)
-      | .letE _ t v b _  => return e.updateLet! (← go t) (← go v) (← go b)
-      | .forallE _ d b _ => return e.updateForallE! (← go d) (← go b)
-      | .lam _ d b _     => return e.updateLambdaE! (← go d) (← go b)
-      | .mdata _ b       => return e.updateMData! (← go b)
-      | .proj _ _ b      => return e.updateProj! (← go b)
-      | .mvar mvarId     =>
-        if !(← mvarId.isAssignable) then
-          return e
-        else
-          let s ← get
-          match s.emap.find? mvarId with
-          | some e' => pure e'
-          | none    => do
-            let e' := mkFVar { name := Name.mkNum `_tc s.nextIdx }
-            modify fun s => { s with nextIdx := s.nextIdx + 1, emap := s.emap.insert mvarId e' }
-            return e'
-      | _ => return e)
+    match e with
+    | .const _ us      => return e.updateConst! (← us.mapM normLevel)
+    | .sort u          => return e.updateSort! (← normLevel u)
+    | .app f a         =>
+      if ← isAppInstance a then
+        return e.updateApp! (← normExpr f) (.sort 0)
+      else
+        return e.updateApp! (← normExpr f) (← normExpr a)
+    | .letE _ t v b _  => return e.updateLet! (← normExpr t) (← normExpr v) (← normExpr b)
+    | .forallE _ d b _ => return e.updateForallE! (← normExpr d) (← normExpr b)
+    | .lam _ d b _     => return e.updateLambdaE! (← normExpr d) (← normExpr b)
+    | .mdata _ b       => return e.updateMData! (← normExpr b)
+    | .proj _ _ b      => return e.updateProj! (← normExpr b)
+    | .mvar mvarId     =>
+      if !(← mvarId.isAssignable) then
+        return e
+      else
+        let s ← get
+        match s.emap.find? mvarId with
+        | some e' => pure e'
+        | none    => do
+          let e' := mkFVar { name := Name.mkNum `_tc s.nextIdx }
+          modify fun s => { s with nextIdx := s.nextIdx + 1, emap := s.emap.insert mvarId e' }
+          return e'
+    | _ => return e)
     cache.modify (fun c => c.insert e result)
     return result
-  go e
+  normExpr e
 
 end MkTableKey
 
