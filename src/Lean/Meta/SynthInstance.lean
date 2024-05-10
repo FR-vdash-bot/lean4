@@ -12,7 +12,6 @@ import Lean.Meta.Instances
 import Lean.Meta.AbstractMVars
 import Lean.Meta.Check
 import Lean.Util.Profile
-import Lean.KeyedDeclsAttribute
 
 namespace Lean.Meta
 
@@ -139,48 +138,39 @@ def isAppInstance (e : Expr) : M Bool := do
   | .const declName _ => isInstance declName
   | _ => return false
 
-unsafe abbrev PtrMap (α : Type) (β : Type) := HashMap (Ptr α) β
-unsafe abbrev PtrTabled (α : Type) (β : Type) (M : Type → Type) :=
-  ReaderT (PtrMap α β) M β
-
-unsafe def normExprUnsafe (e : Expr) : M Expr := do
-  let visited : IO.Ref (PtrMap _ _) ← IO.mkRef {}
-  let rec cached (self : _) : M _ := do
-    if let some result := (← visited.get).find? ⟨self⟩ then return result
-    let result ← normExpr cached self
-    visited.modify (fun c => c.insert ⟨self⟩ result)
+def normExpr (e : Expr) : M Expr := do
+  let cache : IO.Ref (HashMap Expr Expr) ← IO.mkRef {}
+  let rec go (e : Expr) : M Expr := do
+    if let some result := (← cache.get).find? e then return result
+    let result ← (do
+      match e with
+      | .const _ us      => return e.updateConst! (← us.mapM normLevel)
+      | .sort u          => return e.updateSort! (← normLevel u)
+      | .app f a         =>
+        if ← isAppInstance a then
+          return e.updateApp! (← go f) (.sort 0)
+        else
+          return e.updateApp! (← go f) (← go a)
+      | .letE _ t v b _  => return e.updateLet! (← go t) (← go v) (← go b)
+      | .forallE _ d b _ => return e.updateForallE! (← go d) (← go b)
+      | .lam _ d b _     => return e.updateLambdaE! (← go d) (← go b)
+      | .mdata _ b       => return e.updateMData! (← go b)
+      | .proj _ _ b      => return e.updateProj! (← go b)
+      | .mvar mvarId     =>
+        if !(← mvarId.isAssignable) then
+          return e
+        else
+          let s ← get
+          match s.emap.find? mvarId with
+          | some e' => pure e'
+          | none    => do
+            let e' := mkFVar { name := Name.mkNum `_tc s.nextIdx }
+            modify fun s => { s with nextIdx := s.nextIdx + 1, emap := s.emap.insert mvarId e' }
+            return e'
+      | _ => return e)
+    cache.modify (fun c => c.insert e result)
     return result
-  cached e
-where
-  normExpr (normExpr : Expr → M Expr) (e : Expr) : M Expr := do
-    match e with
-    | .const _ us      => return e.updateConst! (← us.mapM normLevel)
-    | .sort u          => return e.updateSort! (← normLevel u)
-    | .app f a         => do
-      if ← isAppInstance a then
-        return e.updateApp! (← normExpr f) (.sort 0)
-      else
-        return e.updateApp! (← normExpr f) (← normExpr a)
-    | .letE _ t v b _  => return e.updateLet! (← normExpr t) (← normExpr v) (← normExpr b)
-    | .forallE _ d b _ => return e.updateForallE! (← normExpr d) (← normExpr b)
-    | .lam _ d b _     => return e.updateLambdaE! (← normExpr d) (← normExpr b)
-    | .mdata _ b       => return e.updateMData! (← normExpr b)
-    | .proj _ _ b      => return e.updateProj! (← normExpr b)
-    | .mvar mvarId     =>
-      if !(← mvarId.isAssignable) then
-        return e
-      else
-        let s ← get
-        match s.emap.find? mvarId with
-        | some e' => pure e'
-        | none    => do
-          let e' := mkFVar { name := Name.mkNum `_tc s.nextIdx }
-          modify fun s => { s with nextIdx := s.nextIdx + 1, emap := s.emap.insert mvarId e' }
-          return e'
-    | _ => return e
-
-@[implemented_by normExprUnsafe]
-opaque normExpr (e : Expr) : M Expr
+  go e
 
 end MkTableKey
 
