@@ -571,10 +571,8 @@ def getTop : SynthM GeneratorNode :=
 /-- Try the next instance in the node on the top of the generator stack. -/
 def generate : SynthM Unit := do
   let gNode ← getTop
-  let pop := do
+  if gNode.currInstanceIdx == 0  then
     modify fun s => { s with generatorStack := s.generatorStack.pop }
-  if gNode.currInstanceIdx == 0 then
-    pop
   else
     let key  := gNode.key
     let idx  := gNode.currInstanceIdx - 1
@@ -594,14 +592,6 @@ def generate : SynthM Unit := do
             modify fun s => { s with generatorStack := s.generatorStack.pop }
             return
     discard do withMCtx mctx do
-      let pop' (key : Expr) : SynthM Bool := do
-        let some e ← findEntry? key | return false
-        if e.answers.size == 0 then return false
-        if e.answers.back.result.numMVars > 0 then return false
-        let type ← instantiateMVars (← inferType mvar)
-        if type.hasMVar then return false
-        pop return true
-      if (← pop' key) then return none
       withTraceNode `Meta.synthInstance
         (return m!"{exceptOptionEmoji ·} apply {inst.val} to {← instantiateMVars (← inferType mvar)}") do
       modifyTop fun gNode => { gNode with currInstanceIdx := idx }
