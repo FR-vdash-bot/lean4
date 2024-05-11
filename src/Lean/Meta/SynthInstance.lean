@@ -567,18 +567,18 @@ def generate : SynthM Unit := do
     let inst := gNode.instances.get! idx
     let mctx := gNode.mctx
     let mvar := gNode.mvar
-    if backward.synthInstance.canonInstances.get (← getOptions) then
     discard do withMCtx mctx do
-      if let some entry := (← get).tableEntries.find? key then
-        unless entry.answers.isEmpty do
-          unless (← instantiateMVars (← inferType mvar)).hasMVar do
-            /-
-            We already have an answer for this node, and since its type does not have metavariables,
-            we can skip other solutions because we assume instances are "morally canonical".
-            We have added this optimization to address issue #3996.
-            -/
-            modify fun s => { s with generatorStack := s.generatorStack.pop }
-            return none
+      if backward.synthInstance.canonInstances.get (← getOptions) then
+        if let some entry := (← get).tableEntries.find? key then
+          unless entry.answers.isEmpty do
+            unless (← instantiateMVars (← inferType mvar)).hasMVar do
+              /-
+              We already have an answer for this node, and since its type does not have metavariables,
+              we can skip other solutions because we assume instances are "morally canonical".
+              We have added this optimization to address issue #3996.
+              -/
+              modify fun s => { s with generatorStack := s.generatorStack.pop }
+              return none
       withTraceNode `Meta.synthInstance
         (return m!"{exceptOptionEmoji ·} apply {inst.val} to {← instantiateMVars (← inferType mvar)}") do
       modifyTop fun gNode => { gNode with currInstanceIdx := idx }
