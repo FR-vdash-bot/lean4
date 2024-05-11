@@ -138,10 +138,10 @@ def isAppInstance (e : Expr) : M Bool := do
   | .const declName _ => isInstance declName
   | _ => return false
 
-unsafe def normExprUnsafe (e : Expr) : M Expr := do
-  let cache : IO.Ref (HashMap (Ptr Expr) Expr) ← IO.mkRef {}
+def normExpr (e : Expr) : M Expr := do
+  let cache : IO.Ref (HashMap Expr Expr) ← IO.mkRef {}
   let rec normExpr (e : Expr) : M Expr := do
-    if let some result := (← cache.get).find? ⟨e⟩ then return result
+    if let some result := (← cache.get).find? e then return result
     let result ← (do
     match e with
     | .const _ us      => return e.updateConst! (← us.mapM normLevel)
@@ -168,12 +168,9 @@ unsafe def normExprUnsafe (e : Expr) : M Expr := do
           modify fun s => { s with nextIdx := s.nextIdx + 1, emap := s.emap.insert mvarId e' }
           return e'
     | _ => return e)
-    cache.modify (fun c => c.insert ⟨e⟩ result)
+    cache.modify (fun c => c.insert e result)
     return result
   normExpr e
-
-@[implemented_by normExprUnsafe]
-opaque normExpr (e : Expr) : M Expr
 
 end MkTableKey
 
@@ -583,7 +580,7 @@ def generate : SynthM Unit := do
     if backward.synthInstance.canonInstances.get (← getOptions) then
       unless gNode.typeHasMVars do
         if let some entry := (← get).tableEntries.find? key then
-          unless entry.answers.isEmpty do
+          unless entry.answers.isEmpty || entry.answers.back.result.numMVars > 0 do
             /-
             We already have an answer for this node, and since its type does not have metavariables,
             we can skip other solutions because we assume instances are "morally canonical".
