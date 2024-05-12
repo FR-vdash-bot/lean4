@@ -47,6 +47,14 @@ structure GeneratorNode where
   mctx            : MetavarContext
   instances       : Array Instance
   currInstanceIdx : Nat
+  /--
+  `typeHasMVars := true` if type of `mvar` contains metavariables.
+  We store this information to implement an optimization that relies on the fact
+  that instances are "morally canonical."
+  That is, we need to find at most one answer for this generator node if the type
+  does not have metavariables.
+  -/
+  typeHasMVars    : Bool
   deriving Inhabited
 
 structure ConsumerNode where
@@ -259,6 +267,7 @@ def mkGeneratorNode? (key mvar : Expr) : MetaM (Option GeneratorNode) := do
     let mctx ← getMCtx
     return some {
       mvar, key, mctx, instances
+      typeHasMVars := mvarType.hasMVar
       currInstanceIdx := instances.size
     }
 
@@ -567,18 +576,19 @@ def generate : SynthM Unit := do
     let inst := gNode.instances.get! idx
     let mctx := gNode.mctx
     let mvar := gNode.mvar
-    discard do withMCtx mctx do
-      if backward.synthInstance.canonInstances.get (← getOptions) then
+    /- See comment at `typeHasMVars` -/
+    if backward.synthInstance.canonInstances.get (← getOptions) then
+      unless gNode.typeHasMVars do
         if let some entry := (← get).tableEntries.find? key then
           unless entry.answers.isEmpty do
-            unless (← instantiateMVars (← inferType mvar)).hasMVar do
-              /-
-              We already have an answer for this node, and since its type does not have metavariables,
-              we can skip other solutions because we assume instances are "morally canonical".
-              We have added this optimization to address issue #3996.
-              -/
-              modify fun s => { s with generatorStack := s.generatorStack.pop }
-              return none
+            /-
+            We already have an answer for this node, and since its type does not have metavariables,
+            we can skip other solutions because we assume instances are "morally canonical".
+            We have added this optimization to address issue #3996.
+            -/
+            modify fun s => { s with generatorStack := s.generatorStack.pop }
+            return
+    discard do withMCtx mctx do
       withTraceNode `Meta.synthInstance
         (return m!"{exceptOptionEmoji ·} apply {inst.val} to {← instantiateMVars (← inferType mvar)}") do
       modifyTop fun gNode => { gNode with currInstanceIdx := idx }
