@@ -101,7 +101,7 @@ structure State where
   emap    : HashMap MVarId Expr := {}
   mctx    : MetavarContext
 
-abbrev M := StateM State
+abbrev M := StateT State MetaM
 
 @[always_inline]
 instance : MonadMCtx M where
@@ -128,13 +128,29 @@ partial def normLevel (u : Level) : M Level := do
           return u'
     | u => return u
 
-partial def normExpr (e : Expr) : M Expr := do
-  if !e.hasMVar then
-    pure e
-  else match e with
+def getAppHead (e : Expr) : Expr :=
+  match e with
+  | .app f _ => getAppHead f
+  | f => f
+
+def isAppInstance (e : Expr) : M Bool := do
+  match getAppHead e with
+  | .const declName _ => isInstance declName
+  | _ => return false
+
+def normExpr (e : Expr) : M Expr := do
+  let cache : IO.Ref (HashMap Expr Expr) ← IO.mkRef {}
+  let rec normExpr (e : Expr) : M Expr := do
+    if let some result := (← cache.get).find? e then return result
+    let result ← (do
+    match e with
     | .const _ us      => return e.updateConst! (← us.mapM normLevel)
     | .sort u          => return e.updateSort! (← normLevel u)
-    | .app f a         => return e.updateApp! (← normExpr f) (← normExpr a)
+    | .app f a         =>
+      if ← isAppInstance a then
+        return e.updateApp! (← normExpr f) (.sort 0)
+      else
+        return e.updateApp! (← normExpr f) (← normExpr a)
     | .letE _ t v b _  => return e.updateLet! (← normExpr t) (← normExpr v) (← normExpr b)
     | .forallE _ d b _ => return e.updateForallE! (← normExpr d) (← normExpr b)
     | .lam _ d b _     => return e.updateLambdaE! (← normExpr d) (← normExpr b)
@@ -151,13 +167,16 @@ partial def normExpr (e : Expr) : M Expr := do
           let e' := mkFVar { name := Name.mkNum `_tc s.nextIdx }
           modify fun s => { s with nextIdx := s.nextIdx + 1, emap := s.emap.insert mvarId e' }
           return e'
-    | _ => return e
+    | _ => return e)
+    cache.modify (fun c => c.insert e result)
+    return result
+  normExpr e
 
 end MkTableKey
 
 /-- Remark: `mkTableKey` assumes `e` does not contain assigned metavariables. -/
-def mkTableKey [Monad m] [MonadMCtx m] (e : Expr) : m Expr := do
-  let (r, s) := MkTableKey.normExpr e |>.run { mctx := (← getMCtx) }
+def mkTableKey (e : Expr) : MetaM Expr := do
+  let (r, s) ← MkTableKey.normExpr e |>.run { mctx := (← getMCtx) }
   setMCtx s.mctx
   return r
 
