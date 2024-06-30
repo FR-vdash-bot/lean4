@@ -10,7 +10,7 @@ of each version.
 
 v4.12.0
 ----------
-Development in progress.
+Release notes in in progress.
 
 v4.11.0
 ----------
@@ -637,6 +637,7 @@ v4.10.0
 
 v4.9.0
 ----------
+---------- 
 
 ### Language features, tactics, and metaprograms
 
@@ -707,6 +708,7 @@ v4.9.0
     This feature can help users diagnose tricky simp failures or issues in code from libraries
     developed using Lean 3 and then ported to Lean 4.
 
+    
     In the following example, it will report that `foo` is a problematic theorem.
     ```lean
     opaque f : Nat → Nat → Nat
@@ -727,6 +729,7 @@ v4.9.0
 
     @[simp] theorem foo : f x (no_index (x, y).2) = y := by sorry
 
+    
     example : f a b ≤ b := by
       simp -- `foo` is still applied with `index := true`
     ```
