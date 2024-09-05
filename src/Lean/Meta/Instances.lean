@@ -104,15 +104,8 @@ private def mkInstanceKey (e : Expr) : MetaM (Array InstanceKey) := do
 Compute the order the arguments of `inst` should by synthesized.
 
 The synthesization order makes sure that all mvars in non-out-params of the
-subgoals are assigned before we try to synthesize it.  Otherwise it goes left
-to right.
-
-For example:
-  - `[Add α] [Zero α] : Foo α` returns `[0, 1]`
-  - `[Mul A] [Mul B] [MulHomClass F A B] : FunLike F A B` returns `[2, 0, 1]`
-    (because A B are out-params and are only filled in once we synthesize 2)
-
-(The type of `inst` must not contain mvars.)
+subgoals are assigned before we try to synthesize it.  Otherwise it goes right
+to left.
 -/
 private partial def computeSynthOrder (inst : Expr) : MetaM (Array Nat) :=
   withReducible do
@@ -156,7 +149,7 @@ private partial def computeSynthOrder (inst : Expr) : MetaM (Array Nat) :=
   -- Now we successively try to find the next ready subgoal, where all
   -- non-out-params are mvar-free.
   let mut synthed := #[]
-  let mut toSynth := List.range argMVars.size |>.filter (argBIs[·]! == .instImplicit) |>.toArray
+  let mut toSynth := (List.range argMVars.size |>.filter (argBIs[·]! == .instImplicit) |>.toArray).reverse
   while !toSynth.isEmpty do
     let next? ← toSynth.findM? fun i => do
       forallTelescopeReducing (← instantiateMVars (← inferType argMVars[i]!)) fun _ argTy => do
